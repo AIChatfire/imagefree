@@ -1,0 +1,11 @@
+-r requirements.txt
+
+# --- 测试
+pytest==9.1.1
+# TestClient 基于 httpx；httpx 已在主依赖里。
+# 🔴 全部用例**零真实上游调用**（httpx.MockTransport），提交会消耗免费额度。
+
+# --- 静态门禁
+# 只启用**能抓真缺陷**的规则集，刻意不收风格规则
+# （一次报上百条的门禁等于没有门禁）。见 ruff.toml。
+ruff==0.16.8

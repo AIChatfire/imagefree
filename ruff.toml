@@ -1,0 +1,33 @@
+# ruff：只启用**能抓真缺陷**的规则，刻意不收风格规则。
+#
+# 判据：这条规则报出来的东西，是"可能出错"还是"不好看"？
+# 前者留下，后者去掉 —— 一次报上百条的门禁等于没有门禁。
+
+line-length = 110
+target-version = "py313"
+exclude = [".venv", "venv", "build", "dist"]
+
+[lint]
+select = [
+    "E9",    # 语法/IO 类硬错误（E501 之类的行长不管）
+    "F",     # 未使用导入/变量、未定义名 —— 这类**真**会炸
+    "B",     # bugbear：可变默认参数、静默 except、错误的断言等
+    "BLE",   # 盲捕异常（except Exception）—— 每处都必须写明"为什么这样是安全的"
+    "UP",    # 过时写法（如 typing.List 而非 list）
+    "SIM",   # 可简化的写法（常常藏着逻辑冗余）
+    "I",     # 导入顺序（能让循环导入一眼看出来）
+    "RUF100",# 无用的 noqa —— 防止门禁被"乱加 noqa"绕过
+]
+ignore = [
+    "E501",   # 行长：格式化工具的事，不是缺陷
+    "B008",   # FastAPI 的 Depends/Query 作默认值是这个框架的**约定写法**
+    "UP009",  # `# -*- coding: utf-8 -*-`：**house style**，与 ../jimeng、../hailuo 一致。
+              # 删了不会更正确，只会让三个仓的头部长得不一样。
+]
+
+[lint.per-file-ignores]
+# 测试里断言就是用来"故意写宽"的，且常需要局部变量做可读性
+"tests/*" = ["B011", "SIM117"]
+
+[lint.isort]
+known-first-party = ["app"]

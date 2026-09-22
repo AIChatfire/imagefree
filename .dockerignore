@@ -1,0 +1,32 @@
+.git
+.gitignore
+.workbuddy
+.env
+.env.*
+!.env.example
+
+# 测试与工具链不进镜像
+tests
+pytest.ini
+ruff.toml
+requirements-dev.txt
+scripts/__pycache__
+__pycache__
+*.py[cod]
+
+# 本地状态与抓包
+*.db
+*.sqlite
+*.sqlite3
+captures
+chunks
+probe-output
+bench
+out
+outputs
+
+.DS_Store
+.idea
+.vscode
+*.md
+!README.md

@@ -1,0 +1,36 @@
+# imagefree-service 运行期依赖
+#
+# 版本按**实测通过的版本**钉住（不是"最新"）。本仓 2026-09-21 全量用例
+# 在下列版本下通过（Python 3.13.12）。
+
+# --- Web 框架与校验
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+
+# --- 上游 HTTP 客户端
+# 上游**没有**签名/加密，httpx 只负责发两个请求。
+# 但它是前端同源接口，所以默认请求头按抓包照抄（见 app/upstream.py）。
+httpx==0.28.1
+
+# --- 任务库
+# 生产 PostgreSQL；SQLite 仅在本地试跑与测试时使用（无需额外驱动）。
+# ⚠️ 上游是**在途互斥**限流 ⇒ 任务是串行消费的，库的吞吐不是瓶颈。
+sqlalchemy==2.0.54
+# PostgreSQL 驱动：**改 TASK_DB 为 postgresql+ 前缀时才需要装**
+psycopg2-binary==2.9.10
+
+# --- 日志与可观测性
+loguru==0.7.3
+# 可选：装不上/配置失败会**降级为只有日志**，服务照常跑（见 app/observability.py）。
+logfire==5.1.0
+
+# --- 生产进程管理（容器里用它起 worker；⚠️ 默认 workers=1 是架构约束，见 gunicorn_conf.py）
+gunicorn==26.2.0
+
+# --- 图像后处理（app/watermark.py：右下角白字水印去除，2026-09-21 实测定稿）
+# 只被 app/watermark.py 与 scripts/remove_watermark.py 引用，服务核心链路不 import 它们；
+# 版本按 envs/imagefree 实测钉住：512² 去水印全流程 ≈5ms（详见 docs/POLLINATIONS-RECON.md §6）。
+opencv-python-headless==5.0.0.93
+numpy==2.5.3

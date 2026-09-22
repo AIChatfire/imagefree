@@ -1,0 +1,43 @@
+# 凭据与本地状态 —— 绝不入库
+.env
+.env.*
+!.env.example
+
+# 🔴 抓包产物可能含 cookie / 浏览器身份（imagefree_free_generation_id）与真实产物 URL
+cookie*.txt
+*.cookie
+captures/
+trace*.json
+*.har
+chunks/
+
+# 任务库（SQLite 试跑）
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# 探测产物
+bench/
+out/
+outputs/
+probe-output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
+
+# 项目记忆（保留目录，忽略内容 —— 里面常含内网地址与抓包细节）
+.workbuddy/memory/*.md

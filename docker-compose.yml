@@ -1,0 +1,57 @@
+# imagefree-service —— imagefree.net 的图片生成异步出口
+#
+#   cp .env.example .env      # 空着就能跑（上游免登录）
+#   docker compose up -d --build
+#   curl -s localhost:8400/healthz          # {"status":"ok"}
+#
+# 🔴 提交任务会消耗**容器出口 IP** 上的上游免费额度；且上游是按 IP 记账的
+#    ⇒ 别把端口发布到公网，也别在同一个出口 IP 上跑多份本服务。
+
+services:
+  app:
+    build: .
+    image: imagefree-service:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 容器内固定走 compose 内网的库；不要在这里覆盖 TASK_DB 去连 127.0.0.1
+      # （容器里的 127.0.0.1 是它自己，不是宿主）。
+      TASK_DB: postgresql+psycopg2://imagefree:${POSTGRES_PASSWORD:-imagefree}@db:5432/imagefree
+      HOST: 0.0.0.0
+      PORT: "8400"
+    ports:
+      # 只绑回环：这是"内网工具"的默认姿势，改它之前先想清楚谁能打过来。
+      - "127.0.0.1:${APP_PORT:-8400}:8400"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8400/healthz', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: imagefree
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imagefree}
+      POSTGRES_DB: imagefree
+    # ⚠️ **刻意不发布宿主端口**：应用走 compose 内网 `db:5432`，
+    # 宿主端口毫无必要，而发布它只会制造冲突源（本机 5432 常年被别的项目占着）。
+    # 要在宿主上做管理：docker compose exec db psql -U imagefree -d imagefree
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imagefree -d imagefree"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+    # 数据卷刻意不设 name：compose 会按项目名隔离，多环境互不踩。
