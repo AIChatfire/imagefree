@@ -266,9 +266,14 @@ class TaskStore:
     def list_tasks(
         self, key_fingerprint: str | None, *, limit: int = 50, offset: int = 0
     ) -> list[TaskRow]:
+        # 🔴 用 `==` 而不是 `.is_()`：`is_()` 只在 **SQLite** 上成立（它的 `IS` 是广义相等），
+        #    而 PostgreSQL 的 `IS` 只接受 NULL/TRUE/FALSE/UNKNOWN ⇒ `IS '<指纹>'` 是**语法错误**。
+        #    2026-09-22 真机部署实测：列表端点因此在 PG 上 500（`psycopg2.errors.SyntaxError`），
+        #    而套件跑在 SQLite 上全绿 ⇒ 这类缺陷必须靠 `tests/test_dialect.py` 的编译期断言钉住。
+        #    `==` 的语义恰好覆盖两种情形：值为 None 时渲染 `IS NULL`（匿名调用方），有值时渲染 `=`。
         stmt = (
             select(TaskRow)
-            .where(TaskRow.key_fingerprint.is_(key_fingerprint))
+            .where(TaskRow.key_fingerprint == key_fingerprint)
             .order_by(TaskRow.created_at.desc(), TaskRow.id.desc())
             .limit(limit)
             .offset(offset)
