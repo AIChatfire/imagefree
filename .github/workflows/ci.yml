@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 静态门禁。**刻意只跑能抓真缺陷的规则**（见 ruff.toml 的说明）：
+  # 一次报上百条的门禁等于没有门禁 —— 没人看，于是连真问题一起忽略。
+  # ---------------------------------------------------------------------------
+  lint:
+    name: 静态门禁（ruff）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install --disable-pip-version-check ruff
+      #: 不装依赖也能跑（只做静态分析）⇒ 门禁比别人快，也更容易保持必过
+      - name: ruff check
+        run: ruff check .
+
+  # ---------------------------------------------------------------------------
+  # 测试。**零真实上游调用**：夹具用 httpx.MockTransport 覆盖全部端点，
+  # 且 `conftest.py` 里有一条"一碰真实网络就炸"的守卫。
+  # 不需要 PostgreSQL（默认 SQLite）⇒ 无需 service container，跑得快。
+  # ---------------------------------------------------------------------------
+  test:
+    name: 测试（pytest）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-py313-${{ hashFiles('requirements*.txt') }}
+      - run: pip install --disable-pip-version-check -r requirements-dev.txt
+      #: 🔴 测试**绝不碰真实网络**（含 DNS）。若哪天有人加了一条真实调用，
+      #: 它会在这里超时/失败 —— 这是有意的。
+      - name: pytest
+        run: python -m pytest -q
+
+  # ---------------------------------------------------------------------------
+  # 启动冒烟：**证明服务起得来 + 契约成立 + 鉴权接线**。
+  # ⚠️ COORDINATOR_ENABLED=0 是**必须**的 —— 协调器默认开启，而提交会消耗上游免费
+  #    额度（且按**出口 IP** 记账）；冒烟时如果不关它，它会代替你向上游提交任务。
+  # ---------------------------------------------------------------------------
+  smoke:
+    name: 启动冒烟（协调器关闭）
+    runs-on: ubuntu-latest
+    env:
+      COORDINATOR_ENABLED: "0"
+      API_KEYS: "smoke-key"
+      TASK_DB: "sqlite+pysqlite:///./smoke.db"
+      PORT: "8400"
+      #: 显式留空：绝不把 CI 的请求丢给真实代理池
+      IMAGEFREE_PROXIES: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install --disable-pip-version-check -r requirements.txt
+      - name: 起服务并等 /healthz
+        run: |
+          gunicorn -c gunicorn_conf.py "app.main:create_app()" &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8400/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8400/healthz
+          echo
+          #: 模型清单是唯一的 models 端点（OpenAI 兼容形态，见 INTERFACE.md §0.1）
+          curl -sf http://127.0.0.1:8400/v1/models | head -c 300
+          echo
+          # 受理必须只回一个 task_id（协调器关 ⇒ 零上游往返、零额度消耗）
+          curl -s -X POST http://127.0.0.1:8400/async/v1/images/generations \
+            -H "Authorization: Bearer smoke-key" -H 'Content-Type: application/json' \
+            -d '{"model":"image-t2i","prompt":"smoke"}' \
+            | tee /tmp/accept.json
+          python -c "import json;d=json.load(open('/tmp/accept.json'));assert set(d)=={'task_id'},d"
+          # 鉴权接线自证：配了 API_KEYS 之后，不带 key 的受理必须 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8400/async/v1/images/generations \
+            -H 'Content-Type: application/json' -d '{"prompt":"x"}')" = "401"
+          echo "冒烟通过：起得来、契约成立、鉴权接线"

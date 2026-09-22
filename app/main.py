@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import ValidationError
 
-from . import models, observability
+from . import __version__, models, observability
 from .config import Settings, get_settings
 from .coordinator import Coordinator
 from .egress import EgressPool
@@ -172,7 +172,9 @@ def create_app(
 
     app = FastAPI(
         title="imagefree-service",
-        version="0.1.0",
+        #: 🔴 版本号**单一事实源**是 `app/__init__.py::__version__`（发布工作流只改那里）；
+        #: 这里硬编码会让镜像里的自报版本与 tag / label 漂移。
+        version=__version__,
         description=(
             "imagefree.net 的异步图片生成出口。受理 → 轮询两段式；"
             "契约见 docs/INTERFACE.md，上游取证见 docs/UPSTREAM.md。"

@@ -10,6 +10,13 @@
 
 FROM python:3.13-slim AS base
 
+# --- 版本与来源（发布工作流注入；label 也是 GHCR 包与仓库关联的依据）
+ARG APP_VERSION=0.0.0-dev
+LABEL org.opencontainers.image.title="imagefree" \
+      org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.source="https://github.com/AIChatfire/imagefree" \
+      org.opencontainers.image.licenses="MIT"
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -23,10 +30,12 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # --- 应用代码
+# ⚠️ 不要 `COPY docs`：docs/ 只有**注释层面**被引用（运行期不读，已 grep 确认），
+#    而 `.dockerignore` 里的 `*.md` 通配一旦将来改成跨目录的写法，`COPY docs` 就会
+#    **直接构建失败**（"excluded by .dockerignore"）—— 与 ../hailuo 踩过的是同一个坑。
 COPY app ./app
 COPY gunicorn_conf.py ./
 COPY scripts ./scripts
-COPY docs ./docs
 
 # --- 非 root 运行
 # 任务库默认落在工作目录（SQLite）⇒ 目录必须对运行用户可写。
