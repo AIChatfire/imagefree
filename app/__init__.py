@@ -14,6 +14,6 @@
 契约文档：docs/INTERFACE.md（对外） · docs/UPSTREAM.md（上游，含取证方式）
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = ["__version__"]
